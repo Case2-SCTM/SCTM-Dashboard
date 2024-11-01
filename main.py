@@ -2,6 +2,7 @@ import threading
 import json
 import time;
 from datetime import datetime
+import queue
 
 from dash import Dash, html, dcc, callback, Output, Input
 import plotly.express as px
@@ -14,8 +15,7 @@ from kafka import KafkaConsumer
 load_figure_template("darkly")
 app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
-# Global list to store streaming data
-streaming_data = []
+data_queue = queue.Queue()
 
 # Kafka consumer function
 def kafka_consumer():
@@ -32,7 +32,7 @@ def kafka_consumer():
             # Add timestamp if not present
             if 'timestamp' not in data:
                 data['timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            streaming_data.append(data)
+            data_queue.put(data)
         # Sleep briefly to prevent tight loop if no messages
         time.sleep(1)
 
@@ -40,15 +40,21 @@ def kafka_consumer():
 consumer_thread = threading.Thread(target=kafka_consumer, daemon=True)
 consumer_thread.start()
 
+streaming_data = []
+
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div([
-    html.H1("Real-Time Traffic Data", style={'textAlign': 'center'}),
+    html.H1("Real-Time Traffic Counts", style={'textAlign': 'center'}),
     dcc.Graph(id="traffic-graph"),
     dcc.Interval(id="interval-component", interval=2000, n_intervals=0)  # Update every 2 seconds
 ])
 
 @app.callback(Output("traffic-graph", "figure"), [Input("interval-component", "n_intervals")])
 def update_graph(n):
+    while not data_queue.empty():
+        data = data_queue.get()
+        streaming_data.append(data)
+
     if not streaming_data:
         return px.line(title="Waiting for Data...")
 
@@ -60,26 +66,37 @@ def update_graph(n):
     # Convert to DataFrame
     df = pd.DataFrame(data_snapshot)
 
-    # Ensure data types are correct
-    df['speed'] = pd.to_numeric(df['speed'], errors='coerce')
-    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+    df['count'] = pd.to_numeric(df['count'], errors='coerce')
+    df['start_timestamp'] = pd.to_datetime(df['start_timestamp'], errors='coerce')
+    df['end_timestamp'] = pd.to_datetime(df['end_timestamp'], errors='coerce')
+    df['sensor_name'] = df['sensor_name'].astype(str)
+    df['category'] = df['category'].astype(str)
 
-    # Drop rows with NaN values
-    df.dropna(subset=['speed', 'timestamp', 'vehicle_id'], inplace=True)
+       # Drop rows with NaN values
+    df.dropna(subset=['count', 'start_timestamp', 'end_timestamp', 'category', 'sensor_name'], inplace=True)
 
-    # Sort by timestamp
-    df.sort_values('timestamp', inplace=True)
+    # Sort by start_timestamp
+    df.sort_values('start_timestamp', inplace=True)
 
     # Create the Plotly figure
     fig = px.line(
         df,
-        x="timestamp",
-        y="speed",
-        color="vehicle_id",
-        title="Traffic Speed Over Time"
+        x='start_timestamp',
+        y='count',
+        color='category',
+        title='Traffic Counts Over Time',
+        labels={
+            'start_timestamp': 'Start Timestamp',
+            'count': 'Count',
+            'category': 'Category'
+        }
     )
 
-    fig.update_layout(xaxis_title="Timestamp", yaxis_title="Speed (km/h)")
+    fig.update_layout(
+        xaxis_title='Start Timestamp',
+        yaxis_title='Count',
+        legend_title='Category',
+    )
 
     return fig
 
