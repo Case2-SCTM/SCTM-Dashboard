@@ -4,7 +4,7 @@ from time import sleep
 from datetime import datetime
 from queue import Queue
 
-from dash import Dash, html, dcc, callback, Output, Input
+from dash import Dash, html, dcc, callback, Output, Input, State
 import plotly.express as px
 import pandas as pd
 import dash_bootstrap_components as dbc
@@ -39,12 +39,12 @@ def kafka_consumer():
         # Sleep briefly to prevent tight loop if no messages
         sleep(1)
 
-
 @app.callback(
     Output("traffic-count-graph", "figure"),
     [Input("interval-component", "n_intervals")],
+    [State("traffic-count-graph", "figure")]
 )
-def update_count_graph(n_intervals):
+def update_count_graph(n_intervals, existing_figure):
     while not data_queue.empty():
         data = data_queue.get()
         streaming_data.append(data)
@@ -82,7 +82,7 @@ def update_count_graph(n_intervals):
         df_grouped,
         x="category",
         y="count",
-        title="Total Trafic Counts by Vehicle Type",
+        title="Total Traffic Counts by Vehicle Type",
         labels={"category": "vehicle type", "count": "total count"},
         color='category',
         color_discrete_map=custom_colors
@@ -94,19 +94,17 @@ def update_count_graph(n_intervals):
         legend_title="Category",
     )
 
+    # Preserve existing layout (like zoom) if an existing figure is provided
+    if existing_figure:
+        fig.update_layout(existing_figure['layout'], overwrite=False)
+
     return fig
 
 
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
     [
-        html.Div(
-            [
-                html.H1("Smart City Traffic Management", style={"textAlign": "center"}),
-                html.Button("Update Data", id="update-button", n_clicks=0),
-            ],
-            style={"display": "flex", "justify-content": "space-between", "align-items": "center"},
-        ),
+        html.H1("Smart City Traffic Management", style={"textAlign": "center"}),
         html.Div(
             [
                 dcc.Graph(id="traffic-count-graph", style={"width": "50%"}),
