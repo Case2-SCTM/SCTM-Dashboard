@@ -46,7 +46,7 @@ streaming_data = []
 app.layout = html.Div([
     html.H1("Real-Time Traffic Counts", style={'textAlign': 'center'}),
     dcc.Graph(id="traffic-graph"),
-    dcc.Interval(id="interval-component", interval=2000, n_intervals=0)  # Update every 2 seconds
+    dcc.Interval(id="interval-component", interval=2000, n_intervals=1000)  # Update every 2 seconds
 ])
 
 @app.callback(Output("traffic-graph", "figure"), [Input("interval-component", "n_intervals")])
@@ -60,41 +60,30 @@ def update_graph(n):
 
     # Copy data to avoid threading issues
     data_snapshot = streaming_data.copy()
-    # Limit to the last 100 data points for performance
-    data_snapshot = data_snapshot[-100:]
 
     # Convert to DataFrame
     df = pd.DataFrame(data_snapshot)
 
     df['count'] = pd.to_numeric(df['count'], errors='coerce')
-    df['start_timestamp'] = pd.to_datetime(df['start_timestamp'], errors='coerce')
-    df['end_timestamp'] = pd.to_datetime(df['end_timestamp'], errors='coerce')
-    df['sensor_name'] = df['sensor_name'].astype(str)
     df['category'] = df['category'].astype(str)
 
-       # Drop rows with NaN values
-    df.dropna(subset=['count', 'start_timestamp', 'end_timestamp', 'category', 'sensor_name'], inplace=True)
+    # Drop rows with NaN values
+    df.dropna(subset=['count', 'category'], inplace=True)
 
-    # Sort by start_timestamp
-    df.sort_values('start_timestamp', inplace=True)
+    df_grouped = df.groupby('category', as_index=False)['count'].sum()
 
     # Create the Plotly figure
-    fig = px.line(
-        df,
-        x='start_timestamp',
+    fig = px.bar(
+        df_grouped,
+        x='category',
         y='count',
-        color='category',
-        title='Traffic Counts Over Time',
-        labels={
-            'start_timestamp': 'Start Timestamp',
-            'count': 'Count',
-            'category': 'Category'
-        }
+        title='Total Trafic Counts by Vehicle Type',
+        labels={'category': 'vehicle type', 'count': 'total count'}
     )
 
     fig.update_layout(
-        xaxis_title='Start Timestamp',
-        yaxis_title='Count',
+        xaxis_title='Vehicle Type',
+        yaxis_title='Total Count',
         legend_title='Category',
     )
 
