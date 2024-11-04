@@ -4,17 +4,19 @@ from time import sleep
 from datetime import datetime
 from queue import Queue
 
-from dash import Dash, html, dcc, callback, Output, Input, State
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output, State
+import dash_bootstrap_components as dbc
 import plotly.express as px
 import pandas as pd
-import dash_bootstrap_components as dbc
 from dash_bootstrap_templates import load_figure_template
 from kafka import KafkaConsumer
 
 # Initialize Dash app with a dark theme
-load_figure_template("darkly")
+load_figure_template("DARKLY")
 
-app = Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
 data_queue = Queue()
 streaming_data = []
@@ -39,10 +41,11 @@ def kafka_consumer():
         # Sleep briefly to prevent tight loop if no messages
         sleep(1)
 
+
 @app.callback(
     Output("traffic-count-graph", "figure"),
     [Input("interval-component", "n_intervals")],
-    [State("traffic-count-graph", "figure")]
+    [State("traffic-count-graph", "figure")],
 )
 def update_count_graph(n_intervals, existing_figure):
     while not data_queue.empty():
@@ -67,14 +70,14 @@ def update_count_graph(n_intervals, existing_figure):
     df_grouped = df.groupby("category", as_index=False)["count"].sum()
 
     custom_colors = {
-        'car': '#1f77b4',
-        'bicycle': '#ff7f0e',
-        'van': '#d62728',
-        'pedestrian': '#9467bd',
-        'motorcycle': '#8c564b',
-        'bus': '#e377c2',
-        'heavy': '#2ca02c',
-        'light': '#7f7f7f'
+        "car": "#1f77b4",
+        "bicycle": "#ff7f0e",
+        "van": "#d62728",
+        "pedestrian": "#9467bd",
+        "motorcycle": "#8c564b",
+        "bus": "#e377c2",
+        "heavy": "#2ca02c",
+        "light": "#7f7f7f",
     }
 
     # Create the Plotly figure
@@ -84,8 +87,8 @@ def update_count_graph(n_intervals, existing_figure):
         y="count",
         title="Total Traffic Counts by Vehicle Type",
         labels={"category": "vehicle type", "count": "total count"},
-        color='category',
-        color_discrete_map=custom_colors
+        color="category",
+        color_discrete_map=custom_colors,
     )
 
     fig.update_layout(
@@ -96,7 +99,7 @@ def update_count_graph(n_intervals, existing_figure):
 
     # Preserve existing layout (like zoom) if an existing figure is provided
     if existing_figure:
-        fig.update_layout(existing_figure['layout'], overwrite=False)
+        fig.update_layout(existing_figure["layout"], overwrite=False)
 
     return fig
 
@@ -104,18 +107,31 @@ def update_count_graph(n_intervals, existing_figure):
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
     [
-        html.H1("Smart City Traffic Management", style={"textAlign": "center"}),
-        html.Div(
-            [
-                dcc.Graph(id="traffic-count-graph", style={"width": "50%"}),
-                dcc.Graph(id="traffic-timeline-graph"),
-            ],
-            style={"display": "flex"}
+        dbc.NavbarSimple(
+            brand="Smart City Traffic Management",
+            brand_href="#",
+            color="dark",
+            dark=True,
         ),
-        html.Div([]),
-        dcc.Interval(
-            id="interval-component", interval=2000, n_intervals=1000
-        ),  # Update every 2 seconds
+        dbc.Container(
+            [
+                dbc.Row(
+                    [
+                        dbc.Col(dcc.Graph(id="traffic-count-graph"), width=6),
+                        dbc.Col(dcc.Graph(id="traffic-pie-graph"), width=6),
+                    ]
+                ),
+                dbc.Row(
+                    [
+                        dbc.Col(dcc.Graph(id="traffic-timeline-graph"), width=12),
+                    ]
+                ),
+                dcc.Interval(
+                    id="interval-component", interval=2 * 1000, n_intervals=0
+                ),  # Update every 2 seconds
+            ],
+            fluid=True,
+        ),
     ]
 )
 
@@ -125,4 +141,4 @@ if __name__ == "__main__":
     consumer_thread = Thread(target=kafka_consumer, daemon=True)
     consumer_thread.start()
 
-    app.run_server(debug=True)
+    app.run(debug=True)
