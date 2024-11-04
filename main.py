@@ -23,7 +23,7 @@ streaming_data = []
 # Kafka consumer function
 def kafka_consumer():
     consumer = KafkaConsumer(
-        "traffic-data",
+        "data-distribution",
         bootstrap_servers=["localhost:9092"],
         auto_offset_reset="latest",
         value_deserializer=lambda x: loads(x.decode("utf-8")),
@@ -41,9 +41,10 @@ def kafka_consumer():
 
 
 @app.callback(
-    Output("traffic-graph", "figure"), [Input("interval-component", "n_intervals")]
+    Output("traffic-count-graph", "figure"),
+    [Input("interval-component", "n_intervals")],
 )
-def update_graph(n):
+def update_count_graph(n_intervals):
     while not data_queue.empty():
         data = data_queue.get()
         streaming_data.append(data)
@@ -99,8 +100,21 @@ def update_graph(n):
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
     [
-        html.H1("Smart City Traffic Management", style={"textAlign": "center"}),
-        dcc.Graph(id="traffic-graph", style={"width": "50%"}),
+        html.Div(
+            [
+                html.H1("Smart City Traffic Management", style={"textAlign": "center"}),
+                html.Button("Update Data", id="update-button", n_clicks=0),
+            ],
+            style={"display": "flex", "justify-content": "space-between", "align-items": "center"},
+        ),
+        html.Div(
+            [
+                dcc.Graph(id="traffic-count-graph", style={"width": "50%"}),
+                dcc.Graph(id="traffic-timeline-graph"),
+            ],
+            style={"display": "flex"}
+        ),
+        html.Div([]),
         dcc.Interval(
             id="interval-component", interval=2000, n_intervals=1000
         ),  # Update every 2 seconds
