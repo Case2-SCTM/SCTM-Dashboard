@@ -96,6 +96,72 @@ def update_count_graph(n_intervals):
 
     return fig
 
+@app.callback(
+    Output("traffic-timeline-graph", "figure"),
+    [Input("interval-component", "n_intervals")],
+)
+def update_timeline_graph(n_intervals):
+    while not data_queue.empty():
+        data = data_queue.get()
+        streaming_data.append(data)
+
+    if not streaming_data:
+        return px.line(title="Waiting for data...")
+    
+    data_snapshot = streaming_data.copy()
+
+    # Convert data to a DataFrame
+    df = pd.DataFrame(data_snapshot)
+
+    # Ensure 'count' is numeric and 'category' is string
+    df["count"] = pd.to_numeric(df["count"], errors="coerce")
+    df["category"] = df["category"].astype(str)
+    df["start_timestamp"] = pd.to_datetime(df["start_timestamp"], unit='s', errors='coerce')
+    df["end_timestamp"] = pd.to_datetime(df["end_timestamp"], unit='s', errors='coerce')
+
+    # Group by start_timestamp and category to get the total count for each vehicle type per timestamp
+    df_grouped = df.groupby(["start_timestamp", "category"], as_index=False)["count"].sum()
+
+    # Sort by timestamp to ensure lines are continuous
+    df_grouped.sort_values("start_timestamp", inplace=True)
+
+    # Define custom colors for each vehicle type
+    custom_colors = {
+        'car': '#1f77b4',
+        'bicycle': '#ff7f0e',
+        'van': '#d62728',
+        'pedestrian': '#9467bd',
+        'motorcycle': '#8c564b',
+        'bus': '#e377c2',
+        'heavy': '#2ca02c',
+        'light': '#7f7f7f'
+    }
+
+    fig = px.histogram(
+        df_grouped,
+        x="start_timestamp",
+        y="count",
+        color="category",
+        title="Traffic Count Distribution Over Time",
+        labels={"start_timestamp": "Timestamp", "count": "Count", "category": "Vehicle Type"},
+        nbins=20,
+        color_discrete_map=custom_colors
+    )
+
+    # Update layout for better readability
+    fig.update_layout(
+        xaxis_title="Timestamp",
+        yaxis_title="Traffic Count",
+        legend_title="Vehicle type",
+        xaxis=dict(
+            tickformat="%H:%M",
+            title_standoff=25
+        ),
+        yaxis=dict(title_standoff=25)
+    )
+
+    return fig
+
 
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
@@ -110,7 +176,7 @@ app.layout = html.Div(
         html.Div(
             [
                 dcc.Graph(id="traffic-count-graph", style={"width": "50%"}),
-                dcc.Graph(id="traffic-timeline-graph"),
+                dcc.Graph(id="traffic-timeline-graph", style={"width": "50%"}),
             ],
             style={"display": "flex"}
         ),
