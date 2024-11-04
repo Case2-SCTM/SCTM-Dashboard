@@ -23,7 +23,7 @@ streaming_data = []
 # Kafka consumer function
 def kafka_consumer():
     consumer = KafkaConsumer(
-        "data-distribution",
+        "traffic-data",
         bootstrap_servers=["localhost:9092"],
         auto_offset_reset="latest",
         value_deserializer=lambda x: loads(x.decode("utf-8")),
@@ -65,6 +65,17 @@ def update_graph(n):
 
     df_grouped = df.groupby("category", as_index=False)["count"].sum()
 
+    custom_colors = {
+        'car': '#1f77b4',
+        'bicycle': '#ff7f0e',
+        'van': '#d62728',
+        'pedestrian': '#9467bd',
+        'motorcycle': '#8c564b',
+        'bus': '#e377c2',
+        'heavy': '#2ca02c',
+        'light': '#7f7f7f'
+    }
+
     # Create the Plotly figure
     fig = px.bar(
         df_grouped,
@@ -72,6 +83,8 @@ def update_graph(n):
         y="count",
         title="Total Trafic Counts by Vehicle Type",
         labels={"category": "vehicle type", "count": "total count"},
+        color='category',
+        color_discrete_map=custom_colors
     )
 
     fig.update_layout(
@@ -87,7 +100,7 @@ def update_graph(n):
 app.layout = html.Div(
     [
         html.H1("Smart City Traffic Management", style={"textAlign": "center"}),
-        dcc.Graph(id="traffic-graph"),
+        dcc.Graph(id="traffic-graph", style={"width": "50%"}),
         dcc.Interval(
             id="interval-component", interval=2000, n_intervals=1000
         ),  # Update every 2 seconds
