@@ -106,8 +106,9 @@ def update_count_graph(n_intervals, existing_figure):
 @app.callback(
     Output("traffic-timeline-graph", "figure"),
     [Input("interval-component", "n_intervals")],
+    [State("traffic-count-graph", "figure")],
 )
-def update_timeline_graph(n_intervals):
+def update_timeline_graph(n_intervals, existing_figure):
     while not data_queue.empty():
         data = data_queue.get()
         streaming_data.append(data)
