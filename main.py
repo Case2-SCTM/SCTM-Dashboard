@@ -12,6 +12,8 @@ import plotly.express as px
 import pandas as pd
 from dash_bootstrap_templates import load_figure_template
 from kafka import KafkaConsumer
+from utils import runThread, runThread1Arg
+
 
 # Initialize Dash app with a dark theme
 load_figure_template("DARKLY")
@@ -23,9 +25,9 @@ streaming_data = []
 
 
 # Kafka consumer function
-def kafka_consumer():
+def kafka_consumer(topic):
     consumer = KafkaConsumer(
-        "data-distribution",
+        topic,
         bootstrap_servers=["localhost:9092"],
         auto_offset_reset="latest",
         value_deserializer=lambda x: loads(x.decode("utf-8")),
@@ -186,13 +188,14 @@ app.layout = html.Div(
             [
                 dbc.Row(
                     [
-                        dbc.Col(dcc.Graph(id="traffic-count-graph"), width=6),
-                        dbc.Col(dcc.Graph(id="traffic-pie-graph"), width=6),
+                        dbc.Col(dcc.Graph(id="traffic-count-graph"), width=7),
+                        dbc.Col(dcc.Graph(id="traffic-pie-graph"), width=5),
                     ]
                 ),
                 dbc.Row(
                     [
-                        dbc.Col(dcc.Graph(id="traffic-timeline-graph"), width=12),
+                        dbc.Col(dcc.Graph(id="traffic-timeline-graph"), width=8),
+                        dbc.Col(dcc.Graph(id="traffic-statistics-graph"), width=4),
                     ]
                 ),
                 dcc.Interval(
@@ -207,7 +210,7 @@ app.layout = html.Div(
 # Start Dash app
 if __name__ == "__main__":
     # Start Kafka consumer in a separate thread
-    consumer_thread = Thread(target=kafka_consumer, daemon=True)
-    consumer_thread.start()
+    runThread1Arg(kafka_consumer, "data-distribution")
+    # runThread1Arg(kafka_consumer, "data-odmatrix")
 
     app.run(debug=True)
