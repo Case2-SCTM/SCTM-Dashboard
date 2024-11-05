@@ -107,9 +107,9 @@ def update_count_graph(n_intervals, existing_figure):
 @app.callback(
     Output("traffic-timeline-graph", "figure"),
     [Input("interval-component", "n_intervals")],
-    [State("traffic-count-graph", "figure")],
+    # [State("traffic-count-graph", "figure")],
 )
-def update_timeline_graph(n_intervals, existing_figure):
+def update_timeline_graph(n_intervals):
     while not data_queue.empty():
         data = data_queue.get()
         streaming_data.append(data)
@@ -166,9 +166,9 @@ def update_timeline_graph(n_intervals, existing_figure):
         xaxis=dict(tickformat="%H:%M"),
     )
 
-    # Preserve existing layout (like zoom) if an existing figure is provided
-    if existing_figure:
-        fig.update_layout(existing_figure["layout"], overwrite=False)
+    # # Preserve existing layout (like zoom) if an existing figure is provided
+    # if existing_figure:
+    #     fig.update_layout(existing_figure["layout"], overwrite=False)
 
     return fig
 
