@@ -45,7 +45,7 @@ def kafka_consumer(topic):
 
 
 @app.callback(
-    Output("traffic-count-graph", "figure"),
+    [Output("traffic-count-graph", "figure"), Output("traffic-pie-graph", "figure")],
     [Input("interval-component", "n_intervals")],
     [State("traffic-count-graph", "figure")],
 )
@@ -83,7 +83,7 @@ def update_count_graph(n_intervals, existing_figure):
     }
 
     # Create the Plotly figure
-    fig = px.bar(
+    bar_fig = px.bar(
         df_grouped,
         x="category",
         y="count",
@@ -93,17 +93,26 @@ def update_count_graph(n_intervals, existing_figure):
         color_discrete_map=custom_colors,
     )
 
-    fig.update_layout(
+    bar_fig.update_layout(
         xaxis_title="Vehicle Type",
         yaxis_title="Total Count",
         legend_title="Category",
     )
 
+    pie_fig = px.pie(
+        df_grouped,
+        names="category",
+        values="count",
+        title="Traffic Distribution by Vehicle Type",
+        color="category",
+        color_discrete_map=custom_colors,
+    )
+
     # Preserve existing layout (like zoom) if an existing figure is provided
     if existing_figure:
-        fig.update_layout(existing_figure["layout"], overwrite=False)
+        bar_fig.update_layout(existing_figure["layout"], overwrite=False)
 
-    return fig
+    return bar_fig, pie_fig
 
 
 @app.callback(
@@ -188,14 +197,14 @@ app.layout = html.Div(
             [
                 dbc.Row(
                     [
-                        dbc.Col(dcc.Graph(id="traffic-count-graph"), width=7),
-                        dbc.Col(dcc.Graph(id="traffic-pie-graph"), width=5),
+                        dbc.Col(dcc.Graph(id="traffic-count-graph"),style={"padding": "0"}, width=7),
+                        dbc.Col(dcc.Graph(id="traffic-pie-graph"),style={"padding": "0"} , width=5),
                     ]
                 ),
                 dbc.Row(
                     [
-                        dbc.Col(dcc.Graph(id="traffic-timeline-graph"), width=8),
-                        dbc.Col(dcc.Graph(id="traffic-statistics-graph"), width=4),
+                        dbc.Col(dcc.Graph(id="traffic-timeline-graph"),style={"padding": "0"} , width=8),
+                        dbc.Col(dcc.Graph(id="traffic-statistics-graph"),style={"padding": "0"}, width=4),
                     ]
                 ),
                 dcc.Interval(
