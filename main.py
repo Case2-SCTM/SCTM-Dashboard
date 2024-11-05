@@ -103,6 +103,128 @@ def update_count_graph(n_intervals, existing_figure):
 
     return fig
 
+@app.callback(
+    Output("traffic-timeline-graph", "figure"),
+    [Input("interval-component", "n_intervals")],
+)
+def update_timeline_graph(n_intervals):
+    while not data_queue.empty():
+        data = data_queue.get()
+        streaming_data.append(data)
+
+    if not streaming_data:
+        return px.line(title="Waiting for data...")
+    
+    data_snapshot = streaming_data.copy()
+
+    # Convert data to a DataFrame
+    df = pd.DataFrame(data_snapshot)
+
+    df["count"] = pd.to_numeric(df["count"], errors="coerce")
+    df["category"] = df["category"].astype(str)
+    df["start_timestamp"] = pd.to_datetime(df["start_timestamp"], unit='s', errors='coerce')
+    df["end_timestamp"] = pd.to_datetime(df["end_timestamp"], unit='s', errors='coerce')
+
+    # Group by timestamp and category to get the total count for each vehicle type per timestamp
+    df_grouped = df.groupby(["start_timestamp", "category"], as_index=False)["count"].sum()
+
+    # Sort grouped dataframe by timestamp
+    df_grouped.sort_values("start_timestamp", inplace=True)
+
+    # Define custom colors for each vehicle type
+    custom_colors = {
+        "car": "#1f77b4",
+        "bicycle": "#ff7f0e",
+        "van": "#d62728",
+        "pedestrian": "#9467bd",
+        "motorcycle": "#8c564b",
+        "bus": "#e377c2",
+        "heavy": "#2ca02c",
+        "light": "#7f7f7f",
+    }
+
+    fig = px.line(
+        df_grouped,
+        x="start_timestamp",
+        y="count",
+        title="Total Traffic Counts by Vehicle Type",
+        labels={"category": "vehicle type", "count": "total count"},
+        color="category",
+        color_discrete_map=custom_colors,
+    )
+
+    fig.update_layout(
+        xaxis_title="Timestamp",
+        yaxis_title="Traffic Count",
+        legend_title="Vehicle type",
+        xaxis=dict(tickformat="%H:%M"),
+    )
+
+    # Preserve existing layout (like zoom) if an existing figure is provided
+    if existing_figure:
+        fig.update_layout(existing_figure["layout"], overwrite=False)
+
+    return fig
+
+@app.callback(
+    Output("traffic-timeline-graph", "figure"),
+    [Input("interval-component", "n_intervals")],
+)
+def update_timeline_graph(n_intervals):
+    while not data_queue.empty():
+        data = data_queue.get()
+        streaming_data.append(data)
+
+    if not streaming_data:
+        return px.line(title="Waiting for data...")
+    
+    data_snapshot = streaming_data.copy()
+
+    # Convert data to a DataFrame
+    df = pd.DataFrame(data_snapshot)
+
+    df["count"] = pd.to_numeric(df["count"], errors="coerce")
+    df["category"] = df["category"].astype(str)
+    df["start_timestamp"] = pd.to_datetime(df["start_timestamp"], unit='s', errors='coerce')
+    df["end_timestamp"] = pd.to_datetime(df["end_timestamp"], unit='s', errors='coerce')
+
+    # Group by timestamp and category to get the total count for each vehicle type per timestamp
+    df_grouped = df.groupby(["start_timestamp", "category"], as_index=False)["count"].sum()
+
+    # Sort grouped dataframe by timestamp
+    df_grouped.sort_values("start_timestamp", inplace=True)
+
+    # Define custom colors for each vehicle type
+    custom_colors = {
+        'car': '#1f77b4',
+        'bicycle': '#ff7f0e',
+        'van': '#d62728',
+        'pedestrian': '#9467bd',
+        'motorcycle': '#8c564b',
+        'bus': '#e377c2',
+        'heavy': '#2ca02c',
+        'light': '#7f7f7f'
+    }
+
+    fig = px.line(
+        df_grouped,
+        x="start_timestamp",
+        y="count",
+        color="category",
+        title="Traffic Count Over Time",
+        labels={"start_timestamp": "Timestamp", "count": "Count", "category": "Vehicle Type"},
+        color_discrete_map=custom_colors
+    )
+
+    fig.update_layout(
+        xaxis_title="Timestamp",
+        yaxis_title="Traffic Count",
+        legend_title="Vehicle type",
+        xaxis=dict(tickformat="%H:%M"),
+    )
+
+    return fig
+
 
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
