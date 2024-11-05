@@ -113,16 +113,15 @@ def update_timeline_graph(n_intervals):
     # Convert data to a DataFrame
     df = pd.DataFrame(data_snapshot)
 
-    # Ensure 'count' is numeric and 'category' is string
     df["count"] = pd.to_numeric(df["count"], errors="coerce")
     df["category"] = df["category"].astype(str)
     df["start_timestamp"] = pd.to_datetime(df["start_timestamp"], unit='s', errors='coerce')
     df["end_timestamp"] = pd.to_datetime(df["end_timestamp"], unit='s', errors='coerce')
 
-    # Group by start_timestamp and category to get the total count for each vehicle type per timestamp
+    # Group by timestamp and category to get the total count for each vehicle type per timestamp
     df_grouped = df.groupby(["start_timestamp", "category"], as_index=False)["count"].sum()
 
-    # Sort by timestamp to ensure lines are continuous
+    # Sort grouped dataframe by timestamp
     df_grouped.sort_values("start_timestamp", inplace=True)
 
     # Define custom colors for each vehicle type
@@ -137,27 +136,21 @@ def update_timeline_graph(n_intervals):
         'light': '#7f7f7f'
     }
 
-    fig = px.histogram(
+    fig = px.line(
         df_grouped,
         x="start_timestamp",
         y="count",
         color="category",
-        title="Traffic Count Distribution Over Time",
+        title="Traffic Count Over Time",
         labels={"start_timestamp": "Timestamp", "count": "Count", "category": "Vehicle Type"},
-        nbins=20,
         color_discrete_map=custom_colors
     )
 
-    # Update layout for better readability
     fig.update_layout(
         xaxis_title="Timestamp",
         yaxis_title="Traffic Count",
         legend_title="Vehicle type",
-        xaxis=dict(
-            tickformat="%H:%M",
-            title_standoff=25
-        ),
-        yaxis=dict(title_standoff=25)
+        xaxis=dict(tickformat="%H:%M"),
     )
 
     return fig
