@@ -1,45 +1,33 @@
-from threading import Thread
+import dash
+import pandas as pd
+import plotly.express as px
+import dash_bootstrap_components as dbc
+from dash import dcc, html
+from dash.dependencies import Input, Output
+from kafka import KafkaConsumer
+from utils import runThread1Arg
 from json import loads
 from time import sleep
-from datetime import datetime
 from queue import Queue
-
-import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output, State
-import dash_bootstrap_components as dbc
-import plotly.express as px
-import pandas as pd
 from dash_bootstrap_templates import load_figure_template
-from kafka import KafkaConsumer
-from utils import runThread, runThread1Arg
 
 
 # Initialize Dash app with a dark theme
 load_figure_template("DARKLY")
-
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
+# Initialize a queue to store incoming data
 data_queue = Queue()
+# List to hold streaming data for visualisation
 streaming_data = []
 
-custom_colors = {
-    "car": "#1f77b4",
-    "bicycle": "#ff7f0e",
-    "van": "#d62728",
-    "pedestrian": "#9467bd",
-    "motorcycle": "#8c564b",
-    "bus": "#e377c2",
-    "heavy": "#2ca02c",
-    "light": "#7f7f7f",
-}
 
-
-# Kafka consumer function
+# Kafka consumer function to read data from the specified topic
 def kafka_consumer(topic):
     consumer = KafkaConsumer(
         topic,
         bootstrap_servers=["localhost:9092"],
+        auto_offset_reset="latest",
         value_deserializer=lambda x: loads(x.decode("utf-8")),
         consumer_timeout_ms=1000,
     )
@@ -50,7 +38,7 @@ def kafka_consumer(topic):
         # Sleep briefly to prevent tight loop if no messages
         sleep(1)
 
-
+# Callback function to update graphs
 @app.callback(
     [
         Output("traffic-count-graph", "figure"),
@@ -58,36 +46,35 @@ def kafka_consumer(topic):
         Output("traffic-timeline-graph", "figure"),
     ],
     [Input("traffic-interval", "n_intervals")],
-    [
-        State("traffic-count-graph", "figure"),
-        State("traffic-pie-graph", "figure"),
-        State("traffic-timeline-graph", "figure"),
-    ],
 )
-def updateDistributionGraphs(n, state_bar, state_pie, state_timeline):
+def updateDistributionGraphs(n):
+    # Get data from the queue
     while not data_queue.empty():
         data = data_queue.get()
         streaming_data.append(data)
 
+    # If there is no data available, display the placeholder text
     if not streaming_data:
-        waiting = (
-            px.bar(title="Waiting for Data..."),
-            px.pie(title="Waiting for Data..."),
-            px.line(title="Waiting for Data..."),
+        bar = px.bar(title="Waiting for Data...").update_layout(
+            margin=dict(t=80, r=50, b=50, l=50)
         )
+        pie = px.pie(title="Waiting for Data...").update_layout(
+            margin=dict(t=80, r=50, b=50, l=50)
+        )
+        line = px.line(title="Waiting for Data...").update_layout(
+            margin=dict(t=80, r=50, b=50, l=50)
+        )
+
+        waiting = (bar, pie, line)
         return waiting
 
-    # Copy data to avoid threading issues
+    # Copy data to avoid threading issues and convert to DataFrame
     data_snapshot = streaming_data.copy()
-
-    # Convert to DataFrame
     df = pd.DataFrame(data_snapshot)
 
-    # Bar and Pie
+    # Convert data types for proper processing
     df["count"] = pd.to_numeric(df["count"], errors="coerce")
     df["category"] = df["category"].astype(str)
-
-    # Timeline
     df["start_timestamp"] = pd.to_datetime(
         df["start_timestamp"], unit="s", errors="coerce"
     )
@@ -96,12 +83,23 @@ def updateDistributionGraphs(n, state_bar, state_pie, state_timeline):
     # Groupped data for bar and pie graph
     df_grouped_category = df.groupby("category", as_index=False)["count"].sum()
 
-    # Groupped data for timeline graph
+    # Groupped data for timeline graph, and category for the timeline graph
     df_grouped_timeline = df.groupby(["start_timestamp", "category"], as_index=False)[
         "count"
     ].sum()
-
     df_grouped_timeline.sort_values("start_timestamp", inplace=True)
+
+    # Custom colors for each category
+    custom_colors = {
+        "car": "#1f77b4",
+        "bicycle": "#ff7f0e",
+        "van": "#d62728",
+        "pedestrian": "#9467bd",
+        "motorcycle": "#8c564b",
+        "bus": "#e377c2",
+        "heavy": "#2ca02c",
+        "light": "#7f7f7f",
+    }
 
     # Create Plotly Bar Graph Figure
     figure_bar = px.bar(
@@ -140,6 +138,12 @@ def updateDistributionGraphs(n, state_bar, state_pie, state_timeline):
         xaxis_title="Vehicle Type",
         yaxis_title="Total Count",
         legend_title="Category",
+        margin=dict(t=80, r=50, b=50, l=50),
+    )
+
+    # Update Layout for Pie Graph
+    figure_pie.update_layout(
+        margin=dict(t=80, r=50, b=50, l=50),
     )
 
     # Update Layout for Line Graph
@@ -148,42 +152,31 @@ def updateDistributionGraphs(n, state_bar, state_pie, state_timeline):
         yaxis_title="Traffic Count",
         legend_title="Vehicle type",
         xaxis=dict(tickformat="%H:%M"),
+        margin=dict(t=80, r=50, b=50, l=50),
     )
 
-    # Update layout only if the existing figures are not the "Waiting for Data" placeholders
-    if (
-        state_bar
-        and state_bar.get("layout", {}).get("title", {}).get("text")
-        != "Waiting for Data..."
-    ):
-        figure_bar.update_layout(state_bar["layout"], overwrite=False)
-
-    if (
-        state_pie
-        and state_pie.get("layout", {}).get("title", {}).get("text")
-        != "Waiting for Data..."
-    ):
-        figure_pie.update_layout(state_pie["layout"], overwrite=False)
-
-    if (
-        state_timeline
-        and state_timeline.get("layout", {}).get("title", {}).get("text")
-        != "Waiting for Data..."
-    ):
-        figure_timeline.update_layout(state_timeline["layout"], overwrite=False)
-
     # Return Bar, Pie and Line Graph
-    return (figure_bar, figure_pie, figure_timeline)
+    return figure_bar, figure_pie, figure_timeline
 
+
+# Styles
+nav_style = {"padding": "0px"}
+container_style = {"height": "calc(100vh - 40px)"}
+col_style = {"height": "100%", "padding": "1px"}
+graph_style = {"height": "100%", "margin": "1px"}
 
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
     [
+        # Navigation bar at the top
         dbc.NavbarSimple(
             brand="Smart City Traffic Management",
             brand_href="#",
             color="dark",
             dark=True,
+            expand="lg",
+            className="ml-auto",
+            style=nav_style,
             children=[
                 dbc.NavItem(
                     html.Div(
@@ -196,43 +189,42 @@ app.layout = html.Div(
                     )
                 )
             ],
-            expand="lg",
-            className="ml-auto",
         ),
+        # The main container for our graphs
         dbc.Container(
-            [
+            [  
+                # The first row with the bar graph and pie chart
                 dbc.Row(
                     [
                         dbc.Col(
-                            dcc.Graph(id="traffic-count-graph"),
-                            style={"padding": "1px"},
+                            dcc.Graph(id="traffic-count-graph", style=graph_style),
+                            style=col_style,
                             width=7,
                         ),
                         dbc.Col(
-                            dcc.Graph(id="traffic-pie-graph"),
-                            style={"padding": "1px"},
+                            dcc.Graph(id="traffic-pie-graph", style=graph_style),
+                            style=col_style,
                             width=5,
                         ),
-                    ]
+                    ],
+                    className="h-50",
                 ),
+                # The second row containing the timeline graph
                 dbc.Row(
                     [
                         dbc.Col(
-                            dcc.Graph(id="traffic-timeline-graph"),
-                            style={"padding": "1px"},
-                            width=8,
+                            dcc.Graph(id="traffic-timeline-graph", style=graph_style),
+                            style=col_style,
+                            width=12,
                         ),
-                        dbc.Col(
-                            dcc.Graph(id="traffic-statistics-graph"),
-                            style={"padding": "1px"},
-                            width=4,
-                        ),
-                    ]
+                    ],
+                    className="h-50",
                 ),
                 dcc.Interval(
-                    id="traffic-interval", interval=1 * 1000, n_intervals=0
-                ),  # Update every 2 seconds
+                    id="traffic-interval", interval=5 * 1000, n_intervals=0
+                ),  # Update the dashboard every 5 seconds
             ],
+            style=container_style,
             fluid=True,
         ),
     ]
@@ -242,6 +234,5 @@ app.layout = html.Div(
 if __name__ == "__main__":
     # Start Kafka consumer in a separate thread
     runThread1Arg(kafka_consumer, "data-distribution")
-    # runThread1Arg(kafka_consumer, "data-odmatrix")
 
-    app.run(debug=True)
+    app.run(debug=True, dev_tools_ui=False)
