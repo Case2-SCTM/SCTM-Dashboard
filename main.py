@@ -14,14 +14,15 @@ from dash_bootstrap_templates import load_figure_template
 
 # Initialize Dash app with a dark theme
 load_figure_template("DARKLY")
-
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
+# Initialize a queue to store incoming data
 data_queue = Queue()
+# List to hold streaming data for visualisation
 streaming_data = []
 
 
-# Kafka consumer function
+# Kafka consumer function to read data from the specified topic
 def kafka_consumer(topic):
     consumer = KafkaConsumer(
         topic,
@@ -37,7 +38,7 @@ def kafka_consumer(topic):
         # Sleep briefly to prevent tight loop if no messages
         sleep(1)
 
-
+# Callback function to update graphs
 @app.callback(
     [
         Output("traffic-count-graph", "figure"),
@@ -47,10 +48,12 @@ def kafka_consumer(topic):
     [Input("traffic-interval", "n_intervals")],
 )
 def updateDistributionGraphs(n):
+    # Get data from the queue
     while not data_queue.empty():
         data = data_queue.get()
         streaming_data.append(data)
 
+    # If there is no data available, display the placeholder text
     if not streaming_data:
         bar = px.bar(title="Waiting for Data...").update_layout(
             margin=dict(t=80, r=50, b=50, l=50)
@@ -69,6 +72,7 @@ def updateDistributionGraphs(n):
     data_snapshot = streaming_data.copy()
     df = pd.DataFrame(data_snapshot)
 
+    # Convert data types for proper processing
     df["count"] = pd.to_numeric(df["count"], errors="coerce")
     df["category"] = df["category"].astype(str)
     df["start_timestamp"] = pd.to_datetime(
@@ -79,11 +83,10 @@ def updateDistributionGraphs(n):
     # Groupped data for bar and pie graph
     df_grouped_category = df.groupby("category", as_index=False)["count"].sum()
 
-    # Groupped data for timeline graph
+    # Groupped data for timeline graph, and category for the timeline graph
     df_grouped_timeline = df.groupby(["start_timestamp", "category"], as_index=False)[
         "count"
     ].sum()
-
     df_grouped_timeline.sort_values("start_timestamp", inplace=True)
 
     # Custom colors for each category
@@ -165,6 +168,7 @@ graph_style = {"height": "100%", "margin": "1px"}
 # Define Dash layout with a graph and interval for updates
 app.layout = html.Div(
     [
+        # Navigation bar at the top
         dbc.NavbarSimple(
             brand="Smart City Traffic Management",
             brand_href="#",
@@ -186,8 +190,10 @@ app.layout = html.Div(
                 )
             ],
         ),
+        # The main container for our graphs
         dbc.Container(
-            [
+            [  
+                # The first row with the bar graph and pie chart
                 dbc.Row(
                     [
                         dbc.Col(
@@ -203,6 +209,7 @@ app.layout = html.Div(
                     ],
                     className="h-50",
                 ),
+                # The second row containing the timeline graph
                 dbc.Row(
                     [
                         dbc.Col(
@@ -215,7 +222,7 @@ app.layout = html.Div(
                 ),
                 dcc.Interval(
                     id="traffic-interval", interval=5 * 1000, n_intervals=0
-                ),  # Update every 2 seconds
+                ),  # Update the dashboard every 5 seconds
             ],
             style=container_style,
             fluid=True,
